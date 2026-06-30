@@ -303,7 +303,7 @@ _NOISE_PHRASES = re.compile(
     r"tax\s*invoice|original\s*for\s*recipient|computer\s*generated|"
     r"certified\s*that|goods\s*once\s*sold|interest\s*@|jurisdiction|"
     r"amount\s*chargeable|ack\s*(no|date)\s*:|irn\s*[-–]|upi\s*id|"
-    r"cgst\s*:|sgst\s*:|igst\s*@|total\s*tax\b|dispatch\s*through|"
+    r"\b(?:output\s*)?[csi]gst\b|total\s*tax\b|dispatch\s*through|"
     r"payment\s*terms|delivery\s*at|contact\s*(person|no)|"
     r"place\s*of\s*supply|acc(?:ount)?\s*number|due\s*date|"
     r"bill\s*to\s*:|ship\s*to\s*:|regd\.?\s*address|"
@@ -321,8 +321,8 @@ _THEAD_ROW = re.compile(
 )
 
 _DESC_TRUNCATE_AT = re.compile(
-    r"\b(?:Contract\s+Period|Contrat\s+Period|Model\s+No\.?|Machine\s+Serial|Serial\s+No\.?|"
-    r"Last\s+Reading|Meter\s+Reading|Opening\s+Reading|Closing\s+Reading)\b",
+    r"\b(?:Contract\s+Period|Contrat\s+Period|Model\b|Machine\s+Serial|Serial\s+No\.?|"
+    r"Last\s+Reading|Meter\s+Reading|Opening\s+Reading|Closing\s+Reading|Rental\s+For)\b",
     re.IGNORECASE,
 )
 
@@ -764,7 +764,7 @@ def _extract_po_number(text: str) -> str:
             for j in range(i + 1, min(i + 8, len(lines))):
                 next_line = lines[j].strip()
                 if next_line:
-                    if any(x in next_line.lower() for x in ["gstin", "gst", "pan", "uin", "state", "address", "phone", "email"]):
+                    if any(x in next_line.lower() for x in ["gstin", "gst", "pan", "uin", "state", "address", "phone", "email", "cin"]):
                         continue
                     for match in _PO_VALUE.finditer(next_line):
                         val = match.group(1).strip()
@@ -774,7 +774,7 @@ def _extract_po_number(text: str) -> str:
             for j in range(max(0, i - 5), i):
                 prev_line = lines[j].strip()
                 if prev_line:
-                    if any(x in prev_line.lower() for x in ["gstin", "gst", "pan", "uin", "state", "address", "phone", "email"]):
+                    if any(x in prev_line.lower() for x in ["gstin", "gst", "pan", "uin", "state", "address", "phone", "email", "cin"]):
                         continue
                     for match in _PO_VALUE.finditer(prev_line):
                         val = match.group(1).strip()
@@ -811,8 +811,18 @@ def _extract_invoice_number(text: str) -> str:
             after = line[m_lbl.end():].strip()
             if not after or after.lower() in ["dated", "date", "no", "no."]:
                 if i + 1 < len(lines):
-                    next_line = lines[i + 1].strip()
-                    words = next_line.split()
+                    next_line = lines[i + 1]
+                    # First try vertical alignment to handle multi-column layout
+                    start_idx = max(0, m_lbl.start() - 4)
+                    sub = next_line[start_idx:]
+                    for match in re.finditer(r'\b([A-Za-z0-9/_-]{4,})\b', sub):
+                        cand = _clean_invoice_number(match.group(1))
+                        if cand and cand.lower() not in ["date", "dated", "delivery", "note", "reference", "mode", "terms", "po", "buyer", "consignee", "total"]:
+                            if any(c.isdigit() for c in cand):
+                                return cand
+                    # Fallback to the first word of next line if vertical alignment fails
+                    next_line_stripped = next_line.strip()
+                    words = next_line_stripped.split()
                     if words:
                         cand = _clean_invoice_number(words[0])
                         if len(cand) >= 4 and any(c.isdigit() for c in cand):
@@ -999,10 +1009,12 @@ def extract_header_generic(text: str) -> dict:
     Extract Invoice Date, Invoice Number, PO Number, and Vendor Name
     using broad patterns covering many Indian vendor invoice layouts.
     """
+    inv_num = _extract_invoice_number(text)
+    po_num = _extract_po_number(text)
     return {
         "Invoice Date":    _extract_invoice_date(text),
-        "Invoice Number":  _extract_invoice_number(text),
-        "PO Number":       _extract_po_number(text),
+        "Invoice Number":  inv_num,
+        "PO Number":       po_num,
         "Vendor Name":     _extract_vendor_name(text),
     }
 
@@ -1547,7 +1559,14 @@ def parse_qty_and_price(line: str, hsn_code: str, row_num: str, money_vals: list
     fallback_money = money_vals if money_vals is not None else parse_numbers_from_line(line)
     qty_str = extract_qty(line)
     price_str = _select_price(fallback_money, qty_str)
+    
+    # If the only number on the line (excluding HSN) is the price itself, quantity is empty.
+    if qty_str and (qty_str == price_str or len(fallback_money) == 1):
+        qty_str = ""
+        
     desc, hsn = extract_description_and_hsn(line)
+    # Strip leading row number prefix
+    desc = re.sub(r"^\s*\d{1,3}\s*(?:[|/\\-]\s*|[IiLl]\s+)?", "", desc)
     desc = re.sub(r"\s*[|IiLl/\\-]$", "", desc).strip()
     return qty_str, price_str, desc
 
@@ -2122,8 +2141,18 @@ def main() -> None:
         combined_records = [r for r in existing_records if r.get("Source File") not in new_files]
         combined_records.extend(all_records)
         
-        write_excel(combined_records, OUTPUT_EXCEL)
-        save_text_file(combined_records, OUTPUT_TXT)
+        try:
+            write_excel(combined_records, OUTPUT_EXCEL)
+        except PermissionError:
+            logger.error(f"Permission denied: Could not write to Excel file {OUTPUT_EXCEL}. Please make sure it is closed.")
+            log_and_print(f"\nWARNING: Could not update Excel file because it is open in another program. Please close '{OUTPUT_EXCEL.name}' and re-run to update the Excel sheet.")
+        except Exception as e:
+            logger.error(f"Failed to write Excel: {e}")
+            
+        try:
+            save_text_file(combined_records, OUTPUT_TXT)
+        except Exception as e:
+            logger.error(f"Failed to save text file: {e}")
     else:
         logger.warning("No records extracted – Excel/TXT not created.")
 
