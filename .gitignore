@@ -1,0 +1,44 @@
+# Python Caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env/
+.env
+ENV/
+
+# Project Logs
+*.log
+invoice_extraction.log
+
+# PyInstaller / Build Artifacts
+build/
+dist/
+*.spec
+gui_app.spec
+
+# Project Data Directories (Invoices and Outputs)
+invoices/
+processed/
+error/
+extracted_text/
+output/
+ocr_layout_output.xlsx
+
+# System / Temporary files
+.DS_Store
+Thumbs.db
+debug_split.py
+
+# Instructional / Prompt Artifacts
+error.md
+gui_prompt.md
+improve_prompt.md
+prompt.md
+test2/
