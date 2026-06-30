@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Invoice Extractor
 
 A local, offline Python tool that extracts key invoice data from PDF files
@@ -257,3 +258,6 @@ Update the `TABLE_HEADERS` dict if the vendor uses non-standard column headings.
 | Empty columns in Excel | Check `extracted_text/` for raw text; refine regex patterns |
 | Wrong data extracted | Add vendor-specific patterns (see Extending section above) |
 | PDF moved to `error/` folder | Check terminal output for the error message |
+=======
+# invoice_extractor
+>>>>>>> 597729f79233db3c0e30cda316390e4992ca72e4
