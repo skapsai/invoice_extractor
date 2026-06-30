@@ -62,39 +62,14 @@ else:
 
 def _load_env_configs() -> dict:
     configs = {
-        "PADDLE_OCR_TOKEN": "e626136dd8ef9f6ca72a4515f346783d1d8fc003",
+        "PADDLE_OCR_TOKEN": "5e3cb5568aa2cac4e5bccb23888a9e1f061754cd",
         "TESSERACT_CMD": "",
         "POPPLER_PATH": ""
     }
-    
-    # Try importing dotenv first, else fallback to reading manually
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(BASE_DIR / ".env")
-    except ImportError:
-        pass
-        
-    dotenv_path = BASE_DIR / ".env"
-    if dotenv_path.exists():
-        try:
-            with open(dotenv_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    if "=" in line:
-                        k, v = line.split("=", 1)
-                        key = k.strip()
-                        val = v.strip().strip('"').strip("'")
-                        configs[key] = val
-        except Exception:
-            pass
-
     # Override with system environment variables if they exist
     for key in configs:
         if key in os.environ:
             configs[key] = os.environ[key]
-            
     return configs
 
 _env_configs = _load_env_configs()

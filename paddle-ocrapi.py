@@ -29,31 +29,7 @@ import requests
 JOB_URL = "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
 DEFAULT_MODEL = "PaddleOCR-VL-1.6"
 
-if getattr(sys, "frozen", False):
-    BASE_DIR = Path(sys.executable).parent
-else:
-    BASE_DIR = Path(__file__).parent
-
-def _load_env_token() -> str:
-    # Try importing dotenv first, else fallback to reading manually
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(BASE_DIR / ".env")
-    except ImportError:
-        dotenv_path = BASE_DIR / ".env"
-        if dotenv_path.exists():
-            with open(dotenv_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    if "=" in line:
-                        k, v = line.split("=", 1)
-                        if k.strip() == "PADDLE_OCR_TOKEN":
-                            return v.strip().strip('"').strip("'")
-    return os.environ.get("PADDLE_OCR_TOKEN", "5e3cb5568aa2cac4e5bccb23888a9e1f061754cd")
-
-DEFAULT_TOKEN = _load_env_token()
+DEFAULT_TOKEN = "5e3cb5568aa2cac4e5bccb23888a9e1f061754cd"
 
 def log_status(msg: str) -> None:
     """Print status message with standard format."""
